@@ -1,0 +1,316 @@
+"""Teste funcional do cadastro manual com análise importada (POST /api/licitacoes).
+
+Fluxo novo: o preenchimento automático pode devolver, além dos campos, a análise
+transcrita de um relatório anexado (campo `analise`). O cadastro grava essa
+análise como se fosse do pipeline — checklist de Documentação funciona direto.
+
+Rodar de dentro de backend/:  .venv\\Scripts\\python.exe tests\\test_cadastro_analise.py
+(também funciona com pytest, se instalado)
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app import security
+from app.config import settings
+from app.database import Base, get_db
+from app.main import app
+from app.models import Analise, Licitacao
+
+engine = create_engine(
+    "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+)
+TestingSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+Base.metadata.create_all(engine)
+
+
+def _get_db_teste():
+    db = TestingSession()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+ADMIN_EMAIL = "admin-cadastro@teste.com"
+ADMIN_SENHA = "senha-inicial"
+
+ANALISE_IMPORTADA = {
+    "objeto_resumido": "Credenciamento para fornecimento de Vale-Alimentação a 150 servidores.",
+    "prazos": [{"descricao": "Data Máx. Credenciamento", "data_ou_prazo": "2026-07-17"}],
+    "exigencias_habilitacao": ["Registro no PAT"],
+    "exigencias_tecnicas": ["Central de atendimento por telefone"],
+    "atestados_exigidos": ["Atestado com no mínimo 50% do efetivo (75 cartões)"],
+    "documentos_habilitacao": [
+        {"categoria": "HABILITAÇÃO JURÍDICA", "documento": "Contrato social em vigor",
+         "referencia_edital": "Item 8.4, a.1, p. 6"},
+        {"categoria": "REGULARIDADE FISCAL E TRABALHISTA", "documento": "CND Federal",
+         "referencia_edital": "Item 8.4, b.5, p. 7"},
+        {"categoria": "OUTROS DOCUMENTOS / DECLARAÇÕES", "documento": "Registro no PAT",
+         "referencia_edital": "Item 8.4, b, p. 6"},
+    ],
+    "riscos": ["Rede credenciada local mínima de 3 estabelecimentos"],
+    "score_beneficios": 7,
+    "score_pagamentos": 0,
+    "classificacao_final": "OPORTUNIDADE MODERADA",
+    "credenciamento_viavel": True,
+    "credenciamento_analise": "Viável. Depende da avaliação financeira e documental.",
+    "alertas_impugnacao": ["Restrição territorial de uso do cartão (Item 16.4.1 do TR)"],
+    "custo_emissao_cartoes": "150 cartões × R$ 5,00 = R$ 750,00",
+    "justificativa": "Aderência total ao objeto, mas volume reduzido e taxa zero.",
+    "analise_completa": "# 1. TABELAS DE DADOS DO CERTAME\n(transcrição integral)",
+}
+
+
+def test_cadastro_com_analise_importada():
+    override_anterior = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = _get_db_teste
+    try:
+        settings.admin_email = ADMIN_EMAIL
+        settings.admin_senha_inicial = ADMIN_SENHA
+        db = TestingSession()
+        security.bootstrap_admin(db)
+        db.close()
+
+        cliente = TestClient(app)
+        r = cliente.post("/api/auth/login", json={"email": ADMIN_EMAIL, "senha": ADMIN_SENHA})
+        assert r.status_code == 200
+
+        # --- cadastro COM análise importada ---
+        r = cliente.post("/api/licitacoes", json={
+            "objeto": "Vale-Alimentação União Paulista",
+            "orgao": "Prefeitura Municipal de União Paulista",
+            "municipio": "União Paulista", "uf": "SP",
+            "modalidade": "Credenciamento Eletrônico",
+            "numero_certame": "019/2026",
+            "valor_estimado": 818694.0,
+            "data_encerramento": "2026-07-17",
+            "analise": ANALISE_IMPORTADA,
+        })
+        assert r.status_code == 201, r.text
+        lic_id = r.json()["id"]
+
+        db = TestingSession()
+        lic = db.get(Licitacao, lic_id)
+        assert lic.status_analise == "analisada"
+        analise = db.execute(select(Analise).where(Analise.licitacao_id == lic_id)).scalar_one()
+        assert analise.score_beneficios == 7 and analise.score_pagamentos == 0
+        assert analise.score == 70  # maior score × 10
+        assert analise.veredito == "revisar_manual"  # OPORTUNIDADE MODERADA
+        assert analise.classificacao_final == "OPORTUNIDADE MODERADA"
+        assert len(analise.documentos_habilitacao) == 3
+        db.close()
+
+        # Checklist de Documentação funciona direto (sem reanálise IA)
+        r = cliente.get(f"/api/licitacoes/{lic_id}/documentos")
+        assert r.status_code == 200
+        docs = r.json()
+        assert docs["tem_checklist"] is True
+        assert docs["reanalise_gera_checklist"] is False
+        assert [i["documento"] for i in docs["checklist"]] == [
+            "Contrato social em vigor", "CND Federal", "Registro no PAT",
+        ]
+
+        # --- cadastro SEM análise: comportamento antigo preservado ---
+        r = cliente.post("/api/licitacoes", json={
+            "objeto": "Outra licitação manual", "numero_certame": "020/2026",
+            "sistema": "Portal de Compras Publicas",
+            "endereco_licitacao": "https://www.portaldecompraspublicas.com.br/processos/123",
+        })
+        assert r.json()["sistema"] == "Portal de Compras Publicas"
+        assert r.json()["endereco_licitacao"].endswith("/123")
+        assert r.status_code == 201
+        lic2_id = r.json()["id"]
+        db = TestingSession()
+        assert db.get(Licitacao, lic2_id).status_analise == "manual"
+        assert db.execute(
+            select(Analise).where(Analise.licitacao_id == lic2_id)
+        ).scalar_one_or_none() is None
+        db.close()
+
+        # --- cadastro com CHECKLIST extraído do edital (sem análise completa) ---
+        r = cliente.post("/api/licitacoes", json={
+            "objeto": "Licitação manual com checklist do edital", "numero_certame": "022/2026",
+            "documentos_habilitacao": [
+                {"categoria": "HABILITAÇÃO JURÍDICA", "documento": "Ato constitutivo",
+                 "referencia_edital": "Item 9.1"},
+                {"categoria": "REGULARIDADE FISCAL E TRABALHISTA", "documento": "CNDT",
+                 "referencia_edital": "Item 9.2"},
+            ],
+        })
+        assert r.status_code == 201, r.text
+        lic5_id = r.json()["id"]
+        db = TestingSession()
+        assert db.get(Licitacao, lic5_id).status_analise == "manual"  # análise completa não feita
+        a5 = db.execute(select(Analise).where(Analise.licitacao_id == lic5_id)).scalar_one()
+        assert len(a5.documentos_habilitacao) == 2
+        assert a5.classificacao_final == ""  # sem badge de classificação no cartão
+        db.close()
+        r = cliente.get(f"/api/licitacoes/{lic5_id}/documentos")
+        assert r.status_code == 200
+        assert r.json()["tem_checklist"] is True
+        assert [i["documento"] for i in r.json()["checklist"]] == ["Ato constitutivo", "CNDT"]
+
+        # checklist inválido NÃO derruba o cadastro (fica sem checklist)
+        r = cliente.post("/api/licitacoes", json={
+            "objeto": "Checklist quebrado", "numero_certame": "023/2026",
+            "documentos_habilitacao": [{"categoria": "CATEGORIA INEXISTENTE", "documento": "X"}],
+        })
+        assert r.status_code == 201
+        db = TestingSession()
+        assert db.execute(select(Analise).where(
+            Analise.licitacao_id == r.json()["id"])).scalar_one_or_none() is None
+        db.close()
+
+        # análise importada tem precedência sobre o checklist avulso
+        r = cliente.post("/api/licitacoes", json={
+            "objeto": "Análise + checklist juntos", "numero_certame": "024/2026",
+            "analise": ANALISE_IMPORTADA,
+            "documentos_habilitacao": [
+                {"categoria": "HABILITAÇÃO JURÍDICA", "documento": "Não deve valer",
+                 "referencia_edital": "-"},
+            ],
+        })
+        assert r.status_code == 201
+        db = TestingSession()
+        a6 = db.execute(select(Analise).where(
+            Analise.licitacao_id == r.json()["id"])).scalar_one()
+        assert len(a6.documentos_habilitacao) == 3  # veio da análise, não do checklist avulso
+        assert a6.classificacao_final == "OPORTUNIDADE MODERADA"
+        db.close()
+
+        # --- análise inválida NÃO derruba o cadastro (fica sem análise) ---
+        r = cliente.post("/api/licitacoes", json={
+            "objeto": "Licitação com análise quebrada", "numero_certame": "021/2026",
+            "analise": {"score_beneficios": "não é número"},
+        })
+        assert r.status_code == 201
+        lic3_id = r.json()["id"]
+        db = TestingSession()
+        assert db.get(Licitacao, lic3_id).status_analise == "manual"
+        assert db.execute(
+            select(Analise).where(Analise.licitacao_id == lic3_id)
+        ).scalar_one_or_none() is None
+        db.close()
+
+        # --- importar análise por PDF em card existente (IA mockada) ---
+        # Rota assíncrona: 202 + job_id, resultado via GET /api/extracoes/{job_id}
+        import time as time_mod
+        from unittest.mock import patch
+
+        from app.analyzer.schemas import CamposLicitacao, ExtracaoCadastro, ResultadoAnalise
+
+        def aguardar_job(resp):
+            assert resp.status_code == 202, resp.text
+            job_id = resp.json()["job_id"]
+            for _ in range(200):
+                r = cliente.get(f"/api/extracoes/{job_id}")
+                assert r.status_code == 200
+                if r.json()["status"] != "processando":
+                    return r.json()
+                time_mod.sleep(0.05)
+            raise AssertionError("job de extração não terminou")
+
+        extracao_fake = ExtracaoCadastro(
+            campos=CamposLicitacao(
+                objeto="Objeto vindo do relatório (não deve sobrescrever)",
+                municipio="União Paulista", uf="SP", valor_estimado=818694.0,
+                data_encerramento="2026-07-17",
+                link="https://www.bll.org.br",
+                sistema="BLL",
+                responsavel="Kendrea Alves Papile Cavatao (Prefeita)",
+                observacoes="Envio exclusivamente pelo portal BLL.",
+            ),
+            analise=ResultadoAnalise.model_validate(ANALISE_IMPORTADA),
+        )
+
+        class AnalisadorFake:
+            def extrair(self, texto=None, pdf_bytes=None):
+                return extracao_fake
+
+        # Card automático sem análise e com campos faltando (como os do mural Sistema S)
+        r = cliente.post("/api/licitacoes", json={
+            "objeto": "Card automático sem análise", "numero_certame": "030/2026",
+        })
+        lic4_id = r.json()["id"]
+        db = TestingSession()
+        lic4 = db.get(Licitacao, lic4_id)
+        lic4.fonte = "fiesc"  # simula card de coleta automática
+        db.commit()
+        db.close()
+
+        with patch("app.analyzer.criar_analisador", return_value=AnalisadorFake()), \
+             patch("app.database.SessionLocal", TestingSession):
+            r = cliente.post(
+                f"/api/licitacoes/{lic4_id}/analise-arquivo",
+                files={"arquivo": ("analise.pdf", b"%PDF-1.4 conteudo", "application/pdf")},
+            )
+            job = aguardar_job(r)
+        assert job["status"] == "pronto", job
+        atualizada = job["resultado"]
+        assert atualizada["analise"]["classificacao_final"] == "OPORTUNIDADE MODERADA"
+        assert len(atualizada["analise"]["documentos_habilitacao"]) == 3
+        # Campos vazios preenchidos pelo relatório; objeto original preservado
+        assert atualizada["municipio"] == "União Paulista" and atualizada["uf"] == "SP"
+        assert atualizada["valor_estimado"] == 818694.0
+        assert atualizada["objeto"] == "Card automático sem análise"
+        assert atualizada["link"] == "https://www.bll.org.br"
+        # Sistema e endereço da licitação preenchidos pelo relatório
+        assert atualizada["sistema"] == "BLL"
+        assert atualizada["endereco_licitacao"] == "https://www.bll.org.br"
+        # Contato/observações do relatório viram notas do card (estavam vazias)
+        db = TestingSession()
+        from app.models import Oportunidade
+        oport = db.execute(
+            select(Oportunidade).where(Oportunidade.licitacao_id == lic4_id)
+        ).scalars().first()
+        assert "Kendrea" in oport.notas and "BLL" in oport.notas
+        db.close()
+
+        # PDF que não é relatório de análise -> job termina em erro 422 e nada é gravado
+        extracao_fake.analise = None
+        with patch("app.analyzer.criar_analisador", return_value=AnalisadorFake()), \
+             patch("app.database.SessionLocal", TestingSession):
+            r = cliente.post(
+                f"/api/licitacoes/{lic2_id}/analise-arquivo",
+                files={"arquivo": ("edital.pdf", b"%PDF-1.4 edital", "application/pdf")},
+            )
+            job = aguardar_job(r)
+        assert job["status"] == "erro" and job["codigo"] == 422, job
+        db = TestingSession()
+        assert db.execute(
+            select(Analise).where(Analise.licitacao_id == lic2_id)
+        ).scalar_one_or_none() is None
+        db.close()
+
+        # --- análise DUPLICADA no banco não pode derrubar a listagem (500) ---
+        db = TestingSession()
+        db.add(Analise(licitacao_id=lic_id, veredito="participar",
+                       classificacao_final="BOA OPORTUNIDADE", score_beneficios=9))
+        db.commit()
+        db.close()
+        r = cliente.get("/api/licitacoes")
+        assert r.status_code == 200, r.text
+        dupla = next(item for item in r.json() if item["id"] == lic_id)
+        # Mostra a análise mais recente (a duplicata adicionada por último)
+        assert dupla["analise"]["classificacao_final"] == "BOA OPORTUNIDADE"
+        r = cliente.get(f"/api/licitacoes/{lic_id}/documentos")
+        assert r.status_code == 200
+
+        print("OK - cadastro com análise, sem análise, checklist do edital, análise inválida, "
+              "importação por PDF e duplicata")
+    finally:
+        if override_anterior:
+            app.dependency_overrides[get_db] = override_anterior
+        else:
+            app.dependency_overrides.pop(get_db, None)
+
+
+if __name__ == "__main__":
+    test_cadastro_com_analise_importada()

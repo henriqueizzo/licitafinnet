@@ -1,0 +1,21 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+*.db
+*.sqlite3
+node_modules/
+dist/
+build/
+.DS_Store
+editais/
+
+# Arquivos de trabalho na raiz (nao fazem parte do app; anchored: nao afeta subpastas)
+/*.pdf
+/*.jpg
+/*.jpeg
+/*.png
+/*.docx
+/*.zip
+/index (1).html
