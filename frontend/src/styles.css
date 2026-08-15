@@ -377,6 +377,7 @@ button.primario:disabled { opacity: 0.5; cursor: wait; box-shadow: none; }
   /* Rolagem vertical por coluna: o quadro cabe na tela e a barra horizontal
      fica sempre ao alcance, mesmo com dezenas de cartões numa coluna */
   max-height: calc(100vh - 150px);
+  max-height: calc(100dvh - 150px); /* celular: desconta a barra do navegador */
   overflow-y: auto;
 }
 .coluna h3 {
@@ -947,6 +948,7 @@ button.primario:disabled { opacity: 0.5; cursor: wait; box-shadow: none; }
 /* ---------- Login / autenticação ---------- */
 .login-fundo {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1065,7 +1067,7 @@ button.primario:disabled { opacity: 0.5; cursor: wait; box-shadow: none; }
 
   /* Cabeçalho empilhado: marca+usuário / abas roláveis / botão de coleta */
   header { gap: 10px; padding: 12px 14px; position: static; }
-  .marca { width: 100%; justify-content: space-between; }
+  .marca { flex: 1; }
   .marca-sub { border-left: none; padding-left: 0; }
   nav {
     order: 3;
@@ -1106,6 +1108,32 @@ button.primario:disabled { opacity: 0.5; cursor: wait; box-shadow: none; }
   .docs-avulso-form input[type='text'] { min-width: 140px; }
   .doc-anexo a { max-width: 160px; }
   .login-card { padding: 28px 22px 24px; }
+
+  /* Busca ocupa a linha inteira; o filtro de UF divide a linha de baixo */
+  .campo-busca { max-width: none; flex-basis: 100%; }
+  .filtro-uf { flex: 1; }
+
+  /* iOS dá zoom automático ao focar campo com fonte < 16px — trava em 16px */
+  .campo-busca input, .filtro-uf,
+  .perfil input, .perfil textarea, .perfil select,
+  .login-card input, .docs-avulso-form input[type='text'] { font-size: 16px; }
+
+  /* Alvos de toque mais generosos (dedo, não mouse) */
+  .usuario-btn, .btn-docs, .btn-anexar,
+  .acoes button, .acoes a, .acoes-linha button { padding: 7px 12px; }
+  .cartao .acoes button, .cartao .acoes a { padding: 7px 12px; }
+  nav button { padding: 10px 12px; }
+  .detalhes-acoes button { padding: 7px 14px; }
+}
+
+/* Telas bem pequenas (celulares compactos) */
+@media (max-width: 430px) {
+  .app { padding: 10px; }
+  header { padding: 10px 12px; }
+  .cockpit { gap: 8px; }
+  .tile { padding: 10px 12px; }
+  .coluna { min-width: 88vw; }
+  .perfil { padding: 14px; }
 }
 
 /* ---------- Aba Atividade (só admin) ---------- */
@@ -1326,6 +1354,17 @@ button.primario:disabled { opacity: 0.5; cursor: wait; box-shadow: none; }
   .dash-vbar-dia { font-size: 0.55rem; }
 }
 
+@media (max-width: 720px) {
+  /* Barras diárias no celular: sem número em cada barra e 1 rótulo de data
+     a cada 4 dias (visibility preserva o alinhamento das colunas) */
+  .dash-vbarras { gap: 2px; padding-top: 6px; }
+  .dash-vbar-eixo { gap: 2px; }
+  .dash-vbar-num { display: none; }
+  .dash-vbar-dia { visibility: hidden; }
+  .dash-vbar-dia:nth-child(4n + 1) { visibility: visible; }
+  .dash-barra { grid-template-columns: 84px 1fr auto; gap: 8px; }
+}
+
 /* ---------- Impressão (report em PDF para o CEO) ---------- */
 @media print {
   body { background: #fff; }
@@ -1421,10 +1460,10 @@ button.primario:disabled { opacity: 0.5; cursor: wait; box-shadow: none; }
   width: 100%; max-width: 880px; display: flex; flex-direction: column;
   background: var(--panel); border: 1px solid var(--linha);
   border-radius: var(--raio); box-shadow: var(--sombra-md);
-  overflow: hidden; max-height: calc(100vh - 80px);
+  overflow: hidden; max-height: calc(100vh - 80px); max-height: calc(100dvh - 80px);
 }
 .modal-fundo-max { padding: 16px; align-items: stretch; }
-.janela-max { max-width: none; max-height: none; height: calc(100vh - 32px); }
+.janela-max { max-width: none; max-height: none; height: calc(100vh - 32px); height: calc(100dvh - 32px); }
 .janela-cabecalho {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 11px 12px 11px 18px; background: var(--azul); flex: none;
@@ -1454,8 +1493,11 @@ button.primario:disabled { opacity: 0.5; cursor: wait; box-shadow: none; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 @media (max-width: 760px) {
-  .janela { max-height: calc(100vh - 32px); }
+  /* Janela de detalhes em tela quase cheia no celular */
+  .modal-fundo { padding: 10px 8px; }
+  .janela { max-width: none; max-height: calc(100vh - 20px); max-height: calc(100dvh - 20px); }
   .janela-corpo { padding: 12px 14px 16px; }
+  .janela-cabecalho { padding: 10px 10px 10px 14px; }
   .janela-min { left: 16px; max-width: none; }
 }
 
