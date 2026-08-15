@@ -6,6 +6,8 @@ services:
     name: licitafinnet
     runtime: python
     plan: free
+    # Mesma região do banco Neon (aws-us-east-1) — app e banco vizinhos
+    region: virginia
     # O ambiente Python do Render também traz Node.js, então o build instala o
     # backend e compila o frontend num comando só. Se o build de Node falhar,
     # defina a env NODE_VERSION (ex.: 20.11.0) — veja DEPLOY.md.
@@ -16,7 +18,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.12.10
       # ----- Preencher no painel do Render (sync: false = valor secreto, não vai para o git) -----
-      - key: DATABASE_URL          # connection string do Supabase (pooler, modo session, porta 5432)
+      - key: DATABASE_URL          # connection string do Neon (host -pooler, sslmode=require)
         sync: false
       - key: ANTHROPIC_API_KEY     # chave da API Anthropic (console.anthropic.com)
         sync: false
