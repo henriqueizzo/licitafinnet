@@ -43,10 +43,23 @@ total_novas = 0
 for i, uf in enumerate(UFS, start=1):
     if uf in feitas:
         continue
-    try:
-        r = executar_coleta(db, dias=dias, ufs=[uf])
-    except Exception as exc:  # uma UF problemática não derruba a varredura inteira
-        print(f"UF {uf} ({i}/27): FALHOU — {exc}", flush=True)
+    r = None
+    for tentativa in (1, 2):
+        try:
+            r = executar_coleta(db, dias=dias, ufs=[uf])
+            break
+        except Exception as exc:
+            # Conexão derrubada pelo Postgres gerenciado é o caso típico: descarta
+            # a sessão furada e refaz a UF com uma nova antes de desistir dela.
+            print(f"UF {uf} ({i}/27): tentativa {tentativa} falhou — {exc}", flush=True)
+            try:
+                db.rollback()
+                db.close()
+            except Exception:
+                pass
+            db = SessionLocal()
+    if r is None:  # uma UF problemática não derruba a varredura inteira
+        print(f"UF {uf} ({i}/27): DESISTIU apos 2 tentativas", flush=True)
         continue
     novas = r.get("novas_licitacoes", 0)
     total_novas += novas

@@ -74,6 +74,12 @@ def executar_coleta(db: Session, dias: int = 3, ufs: list[str] | None = None) ->
         )
 
     for coletor in coletores_ativos(settings):
+        # Encerra a transação aberta ANTES da coleta: a varredura HTTP abaixo leva
+        # minutos sem tocar no banco, e Postgres gerenciado (Neon/Supabase) derruba
+        # conexões ociosas — o commit devolve a conexão ao pool, que revalida na
+        # próxima checagem (pool_pre_ping). Sem isso, estados grandes falhavam com
+        # "SSL connection has been closed unexpectedly" na hora de gravar.
+        db.commit()
         try:
             coletadas = coletor.coletar(ufs, palavras, dias=dias)
         except Exception as exc:
