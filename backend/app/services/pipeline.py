@@ -52,10 +52,15 @@ def perfil_como_dict(perfil: PerfilEmpresa) -> dict:
     }
 
 
-def executar_coleta(db: Session, dias: int = 3) -> dict:
-    """Coleta licitações novas de todas as fontes ativas e grava no banco."""
+def executar_coleta(db: Session, dias: int = 3, ufs: list[str] | None = None) -> dict:
+    """Coleta licitações novas de todas as fontes ativas e grava no banco.
+
+    `ufs` sobrepõe as UFs do perfil — permite varrer estado a estado, gravando
+    o resultado de cada um (uma varredura nacional leva horas; sem isso, uma
+    interrupção no meio descartaria tudo o que já havia sido coletado).
+    """
     perfil = obter_perfil(db)
-    ufs = perfil.ufs or ["RS", "SC", "PR"]
+    ufs = ufs or perfil.ufs or ["RS", "SC", "PR"]
     palavras = perfil.palavras_chave or []
     novas = 0
     espelhos_ignorados = 0
