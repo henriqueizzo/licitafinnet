@@ -223,6 +223,17 @@ export default function DetalhesLicitacao({ licitacao, aoMudar, aoFechar }) {
         )}
       </div>
 
+      {a?.justificativa && (
+        <div className={`motivo-ia ${CORES_CLASSIFICACAO[a.classificacao_final] || 'amarelo'}`}>
+          <strong>
+            {a.classificacao_final
+              ? `Por que "${a.classificacao_final}"?`
+              : 'Justificativa da análise'}
+          </strong>
+          <p>{a.justificativa}</p>
+        </div>
+      )}
+
       <p><strong>Objeto:</strong> {l.objeto || '—'}</p>
 
       {a ? (
@@ -237,7 +248,6 @@ export default function DetalhesLicitacao({ licitacao, aoMudar, aoFechar }) {
           {a.alertas_impugnacao?.length > 0 && (
             <p><strong>Alertas de impugnação:</strong> {a.alertas_impugnacao.join(' • ')}</p>
           )}
-          {a.justificativa && <p><strong>Justificativa:</strong> {a.justificativa}</p>}
           {a.prazos?.length > 0 && (
             <p><strong>Prazos:</strong> {a.prazos.map((p) => `${p.descricao}: ${p.data_ou_prazo}`).join(' • ')}</p>
           )}

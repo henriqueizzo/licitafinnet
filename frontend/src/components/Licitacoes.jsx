@@ -121,11 +121,21 @@ export default function Licitacoes() {
               <td>
                 {l.analise ? (
                   l.analise.classificacao_final ? (
-                    <span className={`veredito ${CORES_CLASSIFICACAO[l.analise.classificacao_final] || 'amarelo'}`}>
+                    <span
+                      className={`veredito ${CORES_CLASSIFICACAO[l.analise.classificacao_final] || 'amarelo'}`}
+                      title={l.analise.justificativa
+                        ? `Por quê: ${l.analise.justificativa}`
+                        : undefined}
+                    >
                       EDI {l.analise.score_beneficios}/10 • Pag {l.analise.score_pagamentos}/10 • {l.analise.classificacao_final}
                     </span>
                   ) : (
-                    <span className={`veredito ${CORES_VEREDITO[l.analise.veredito]}`}>
+                    <span
+                      className={`veredito ${CORES_VEREDITO[l.analise.veredito]}`}
+                      title={l.analise.justificativa
+                        ? `Por quê: ${l.analise.justificativa}`
+                        : undefined}
+                    >
                       {l.analise.score} • {l.analise.veredito.replace('_', ' ')}
                     </span>
                   )

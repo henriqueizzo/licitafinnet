@@ -173,7 +173,12 @@ function CartaoVisual({
       <div className="cartao-ia">
         {visual ? (
           <>
-            <span className={`veredito ${visual.tom}`} title={analise.classificacao_final}>
+            <span
+              className={`veredito ${visual.tom}`}
+              title={analise.justificativa
+                ? `${analise.classificacao_final}\n\nPor quê: ${analise.justificativa}`
+                : analise.classificacao_final}
+            >
               {visual.rotulo}
             </span>
             {analise.score_beneficios != null && analise.score_pagamentos != null && (
