@@ -53,8 +53,10 @@ def _nome_sistema(objeto: str, link_sistema: str) -> str:
             return nome
     return dominio or ""
 
-# Modalidades relevantes (Lei 14.133): 6=Pregão eletrônico, 8=Dispensa, 4=Concorrência eletrônica
-MODALIDADES = [6, 8, 4]
+# Modalidades relevantes (Lei 14.133): 6=Pregão eletrônico, 8=Dispensa, 4=Concorrência
+# eletrônica, 12=Credenciamento, 9=Inexigibilidade — credenciamento/inexigibilidade são a
+# porta usual de contratos de EDI/VAN no setor público (ex.: credenciamento EDI da Caixa)
+MODALIDADES = [6, 8, 4, 12, 9]
 
 # /proposta: `dataFinal` é o TETO da data de ENCERRAMENTO das propostas, não "hoje" —
 # com dataFinal=hoje o endpoint devolve apenas o que encerra no próprio dia (uma fatia
@@ -104,8 +106,12 @@ class PNCPCollector(BaseCollector):
                     })
 
                     for item in itens:
+                        # Objetos genéricos ("contratação de serviços de tecnologia…")
+                        # escondem o serviço real na informação complementar — o filtro
+                        # olha os dois campos para não descartar certame aderente.
                         objeto = item.get("objetoCompra", "")
-                        if not self.bate_palavra_chave(objeto, palavras_chave):
+                        complemento = item.get("informacaoComplementar") or ""
+                        if not self.bate_palavra_chave(f"{objeto}\n{complemento}", palavras_chave):
                             continue
                         lic = self._normalizar(item, uf)
                         if lic.id_externo in vistos:
