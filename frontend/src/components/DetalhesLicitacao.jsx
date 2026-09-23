@@ -31,6 +31,7 @@ export default function DetalhesLicitacao({ licitacao, aoMudar, aoFechar }) {
   const [editando, setEditando] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [importando, setImportando] = useState(false)
+  const [gerandoPdf, setGerandoPdf] = useState(false)
   const [msg, setMsg] = useState('')
   const inputAnalise = useRef(null)
   const [form, setForm] = useState({
@@ -112,6 +113,27 @@ export default function DetalhesLicitacao({ licitacao, aoMudar, aoFechar }) {
     }
   }
 
+  async function gerarPdf() {
+    setGerandoPdf(true)
+    setMsg('')
+    try {
+      const { blob, nome } = await api.gerarPdfLicitacao(l.id)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = nome
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      setMsg('📑 PDF gerado com a identidade Finnet — pronto para compartilhar com o time.')
+    } catch (e) {
+      setMsg(`Erro ao gerar o PDF: ${e.message}`)
+    } finally {
+      setGerandoPdf(false)
+    }
+  }
+
   async function excluir() {
     const nome = [l.orgao, l.municipio && `${l.municipio}/${l.uf}`].filter(Boolean).join(' — ')
     if (!window.confirm(
@@ -131,7 +153,7 @@ export default function DetalhesLicitacao({ licitacao, aoMudar, aoFechar }) {
     }
   }
 
-  const ocupado = salvando || importando
+  const ocupado = salvando || importando || gerandoPdf
   return (
     <div className="detalhes-lic">
       <div className="detalhes-cabecalho">
@@ -167,6 +189,10 @@ export default function DetalhesLicitacao({ licitacao, aoMudar, aoFechar }) {
         </button>
         <input ref={inputAnalise} type="file" accept="application/pdf,.pdf"
           style={{ display: 'none' }} onChange={importarAnalise} />
+        <button type="button" disabled={ocupado} onClick={gerarPdf}
+          title="Baixa um PDF com todas as informações da licitação (dados, análise da IA, checklist e links) no padrão Finnet, para compartilhar com o time">
+          {gerandoPdf ? '⏳ Gerando PDF…' : '📑 Gerar PDF'}
+        </button>
         <button type="button" className="btn-excluir" disabled={ocupado} onClick={excluir}
           title="Exclui a licitação, o card, a análise e os documentos — sem desfazer">
           🗑 Excluir

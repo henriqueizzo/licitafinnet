@@ -19,6 +19,8 @@ const TIPOS = {
   reanalise: 'Reanálise IA',
   importar_analise: 'Análise importada (PDF)',
   extracao_cadastro: 'Extração de cadastro',
+  gerar_declaracao: 'Declaração gerada (Word)',
+  gerar_pdf: 'PDF da licitação gerado',
 }
 
 const rotuloTipo = (tipo) => TIPOS[tipo] || tipo

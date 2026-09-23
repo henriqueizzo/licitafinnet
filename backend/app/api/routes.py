@@ -993,6 +993,58 @@ def gerar_declaracao(
     )
 
 
+@router.get("/licitacoes/{licitacao_id}/pdf")
+def gerar_pdf_licitacao(
+    licitacao_id: int,
+    usuario: Usuario = Depends(usuario_atual),
+    db: Session = Depends(get_db),
+):
+    """Relatório completo da licitação em PDF, com a identidade Finnet.
+
+    Junta o que o detalhe do card mostra (dados do certame, classificação, scores,
+    justificativa, prazos, exigências, riscos, checklist com o que já foi anexado,
+    estágio no pipeline e links) para o time compartilhar sem copiar e colar.
+    Não usa IA — a resposta é imediata.
+    """
+    from ..services import relatorio_pdf
+
+    lic = db.get(Licitacao, licitacao_id)
+    if not lic:
+        raise HTTPException(404, "Licitação não encontrada")
+
+    analise = _analise_da_licitacao(db, licitacao_id)
+    oportunidade = db.execute(
+        select(Oportunidade).where(Oportunidade.licitacao_id == licitacao_id)
+    ).scalars().first()
+
+    # Mesmo casamento do checklist com os anexos usado em listar_documentos
+    checklist = (analise.documentos_habilitacao if analise else None) or []
+    itens = {(item.get("documento") or "").strip() for item in checklist}
+    anexos = db.execute(
+        select(DocumentoAnexo.item_checklist, DocumentoAnexo.nome_arquivo)
+        .where(DocumentoAnexo.licitacao_id == licitacao_id)
+        .order_by(DocumentoAnexo.criado_em)
+    ).all()
+    por_item: dict[str, list[str]] = {}
+    avulsos: list[str] = []
+    for item_checklist, nome in anexos:
+        chave = (item_checklist or "").strip()
+        if chave and chave in itens:
+            por_item.setdefault(chave, []).append(nome)
+        else:
+            avulsos.append(nome)
+
+    pdf = relatorio_pdf.gerar_pdf(lic, analise, oportunidade, por_item, avulsos, usuario)
+    registrar_evento(db, usuario, "gerar_pdf", licitacao_id=lic.id, detalhe=(lic.orgao or "")[:200])
+
+    arquivo = relatorio_pdf.nome_arquivo(lic)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(arquivo)}"},
+    )
+
+
 # ---------- Perfil da empresa ----------
 
 class PerfilIn(BaseModel):

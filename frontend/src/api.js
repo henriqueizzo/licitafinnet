@@ -93,6 +93,27 @@ export const api = {
     )
     return { blob: await r.blob(), nome, origem: r.headers.get('X-Texto-Origem') || '' }
   },
+  // Relatório completo da licitação em PDF (identidade Finnet) — { blob, nome }
+  gerarPdfLicitacao: async (licitacaoId) => {
+    const r = await fetch(`/api/licitacoes/${licitacaoId}/pdf`, { credentials: 'same-origin' })
+    if (r.status === 401) {
+      if (ao401) ao401()
+      throw new Error('Sessão expirada — entre novamente')
+    }
+    if (!r.ok) {
+      let msg = `Erro ${r.status}`
+      try {
+        const dados = await r.json()
+        if (typeof dados.detail === 'string') msg = dados.detail
+      } catch { /* corpo não-JSON */ }
+      throw new Error(msg)
+    }
+    const nome = decodeURIComponent(
+      (r.headers.get('Content-Disposition') || '').match(/filename\*=UTF-8''([^;]+)/)?.[1] ||
+      'licitacao.pdf'
+    )
+    return { blob: await r.blob(), nome }
+  },
   oportunidades: () => req('/api/oportunidades'),
   atualizarOportunidade: (id, patch) =>
     req(`/api/oportunidades/${id}`, { ...post(patch), method: 'PATCH' }),
