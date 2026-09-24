@@ -1045,6 +1045,55 @@ def gerar_pdf_licitacao(
     )
 
 
+@router.get("/licitacoes/{licitacao_id}/edital")
+def listar_arquivos_edital(licitacao_id: int, db: Session = Depends(get_db)):
+    """Edital e anexos publicados na origem (PNCP: edital, TR, anexos), para o card.
+
+    `arquivos` vazio = a origem não tem arquivo acessível (fica o link do portal).
+    `erro` preenchido = a origem falhou agora (tentar de novo depois).
+    """
+    from ..services import edital as svc_edital
+
+    lic = db.get(Licitacao, licitacao_id)
+    if not lic:
+        raise HTTPException(404, "Licitação não encontrada")
+    try:
+        arquivos = svc_edital.listar_arquivos(lic)
+    except Exception as exc:
+        logger.warning("Falha ao listar edital da licitação %s: %s", licitacao_id, exc)
+        return {"licitacao_id": licitacao_id, "arquivos": [], "erro": "A origem não respondeu agora."}
+    return {"licitacao_id": licitacao_id, "arquivos": arquivos, "erro": ""}
+
+
+@router.get("/licitacoes/{licitacao_id}/edital/{seq}")
+def baixar_arquivo_edital(
+    licitacao_id: int,
+    seq: int,
+    usuario: Usuario = Depends(usuario_atual),
+    db: Session = Depends(get_db),
+):
+    """Baixa um arquivo do edital pela origem (proxy: o PNCP não libera CORS)."""
+    from ..services import edital as svc_edital
+
+    lic = db.get(Licitacao, licitacao_id)
+    if not lic:
+        raise HTTPException(404, "Licitação não encontrada")
+    try:
+        conteudo, nome, content_type = svc_edital.baixar_arquivo(lic, seq)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+    except Exception as exc:
+        logger.warning("Falha ao baixar edital %s/%s: %s", licitacao_id, seq, exc)
+        raise HTTPException(502, "A origem não entregou o arquivo agora — tente de novo em instantes.")
+
+    registrar_evento(db, usuario, "download_edital", licitacao_id=lic.id, detalhe=nome[:200])
+    return Response(
+        content=conteudo,
+        media_type=content_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(nome)}"},
+    )
+
+
 # ---------- Perfil da empresa ----------
 
 class PerfilIn(BaseModel):

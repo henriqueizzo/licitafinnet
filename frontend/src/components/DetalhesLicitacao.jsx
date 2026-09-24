@@ -2,7 +2,7 @@
 // suspender/reativar o certame, editar campos (vencimento etc.) e anexar a
 // análise em PDF (relatório do time) que atualiza o card e o checklist de docs.
 // Usado no modal do kanban (clique no card) e na linha expandida da aba Licitações.
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 
 const brl = (v) =>
@@ -32,6 +32,8 @@ export default function DetalhesLicitacao({ licitacao, aoMudar, aoFechar }) {
   const [salvando, setSalvando] = useState(false)
   const [importando, setImportando] = useState(false)
   const [gerandoPdf, setGerandoPdf] = useState(false)
+  // Edital e anexos da origem: null = carregando, { arquivos, erro } depois
+  const [edital, setEdital] = useState(null)
   const [msg, setMsg] = useState('')
   const inputAnalise = useRef(null)
   const [form, setForm] = useState({
@@ -43,6 +45,16 @@ export default function DetalhesLicitacao({ licitacao, aoMudar, aoFechar }) {
     endereco_licitacao: licitacao.endereco_licitacao || '',
   })
   const a = l.analise
+
+  // Ao abrir o card, puxa da origem (PNCP etc.) o edital e os anexos publicados
+  useEffect(() => {
+    let ativo = true
+    setEdital(null)
+    api.arquivosEdital(l.id)
+      .then((r) => { if (ativo) setEdital(r) })
+      .catch((e) => { if (ativo) setEdital({ arquivos: [], erro: e.message }) })
+    return () => { ativo = false }
+  }, [l.id])
 
   async function alternarSuspensa() {
     setSalvando(true)
@@ -259,6 +271,36 @@ export default function DetalhesLicitacao({ licitacao, aoMudar, aoFechar }) {
           <p>{a.justificativa}</p>
         </div>
       )}
+
+      <div className="detalhes-edital">
+        <small>Edital e anexos (da origem)</small>
+        {edital === null ? (
+          <p className="pendente">⏳ Buscando o edital na origem…</p>
+        ) : edital.arquivos.length > 0 ? (
+          <ul>
+            {edital.arquivos.map((arq) => (
+              <li key={arq.seq}>
+                <span className={`tipo-arquivo ${/edital/i.test(arq.tipo) ? 'edital' : ''}`}>
+                  {arq.tipo || 'Arquivo'}
+                </span>
+                <a href={api.urlArquivoEdital(l.id, arq.seq)}
+                  title="Baixar pelo CRM (o arquivo vem direto da origem)">
+                  📎 {arq.titulo}
+                </a>
+                {arq.publicado_em && <small>publicado em {dataBr(arq.publicado_em)}</small>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="pendente">
+            {edital.erro
+              ? `⚠ ${edital.erro} Use o link do portal abaixo ou reabra o card daqui a pouco.`
+              : l.fonte === 'pncp'
+                ? 'A origem ainda não publicou arquivos para esta licitação — use o link do portal abaixo.'
+                : 'Esta fonte não disponibiliza o edital por link direto — use o link do portal abaixo.'}
+          </p>
+        )}
+      </div>
 
       <p><strong>Objeto:</strong> {l.objeto || '—'}</p>
 

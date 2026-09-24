@@ -1223,6 +1223,25 @@ button.primario:disabled { opacity: 0.5; cursor: wait; box-shadow: none; }
 .atividade-uso-dia { max-width: 520px; }
 .detalhes-links { display: flex; gap: 18px; flex-wrap: wrap; }
 
+/* Edital e anexos puxados da origem ao abrir o card */
+.detalhes-edital {
+  background: var(--panel-2, #f8fafc); border: 1px solid var(--linha, #e2e8f0);
+  border-radius: var(--raio-sm, 12px); padding: 10px 12px; margin: 6px 0 10px;
+}
+.detalhes-edital > small {
+  display: block; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--gelo, #64748b); margin-bottom: 6px;
+}
+.detalhes-edital ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.detalhes-edital li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.85rem; }
+.detalhes-edital li a { font-weight: 600; }
+.detalhes-edital .tipo-arquivo {
+  font-size: 0.68rem; font-weight: 600; border-radius: 999px; padding: 1px 8px;
+  background: var(--azul-suave, #edf1f8); color: var(--azul-texto, #16254a);
+}
+.detalhes-edital .tipo-arquivo.edital { background: var(--verde-fundo, #ecfdf5); color: var(--verde-texto, #047857); }
+.detalhes-edital .pendente { margin: 0; font-size: 0.82rem; }
+
 /* ---------- Aba Dashboard (report executivo) ---------- */
 .dashboard { display: flex; flex-direction: column; gap: 16px; }
 .dash-topo {

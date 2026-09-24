@@ -21,6 +21,7 @@ const TIPOS = {
   extracao_cadastro: 'Extração de cadastro',
   gerar_declaracao: 'Declaração gerada (Word)',
   gerar_pdf: 'PDF da licitação gerado',
+  download_edital: 'Download do edital',
 }
 
 const rotuloTipo = (tipo) => TIPOS[tipo] || tipo

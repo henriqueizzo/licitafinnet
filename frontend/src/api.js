@@ -93,6 +93,9 @@ export const api = {
     )
     return { blob: await r.blob(), nome, origem: r.headers.get('X-Texto-Origem') || '' }
   },
+  // Edital e anexos publicados na origem (PNCP etc.) — { arquivos: [{seq, titulo, tipo}], erro }
+  arquivosEdital: (licitacaoId) => req(`/api/licitacoes/${licitacaoId}/edital`),
+  urlArquivoEdital: (licitacaoId, seq) => `/api/licitacoes/${licitacaoId}/edital/${seq}`,
   // Relatório completo da licitação em PDF (identidade Finnet) — { blob, nome }
   gerarPdfLicitacao: async (licitacaoId) => {
     const r = await fetch(`/api/licitacoes/${licitacaoId}/pdf`, { credentials: 'same-origin' })
