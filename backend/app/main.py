@@ -186,7 +186,13 @@ if _FRONTEND_DIST:
             # protege contra path traversal e só serve o que está dentro do dist
             if arquivo.is_file() and arquivo.is_relative_to(_FRONTEND_DIST):
                 return FileResponse(arquivo)
-        return FileResponse(_FRONTEND_DIST / "index.html")
+        # Sem isto o navegador aplica cache heurístico ao index.html e continua
+        # apontando para o bundle antigo depois de um deploy (ficou dias sem ver
+        # o botão novo). no-cache = revalida a cada carga (ETag) e pega o novo.
+        return FileResponse(
+            _FRONTEND_DIST / "index.html",
+            headers={"Cache-Control": "no-cache, must-revalidate"},
+        )
 
     logger.info("Frontend (SPA) servido de %s", _FRONTEND_DIST)
 else:
